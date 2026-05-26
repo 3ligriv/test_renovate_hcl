@@ -1,138 +1,150 @@
-job "mailserver" {
-    group "servers" {
-        volume "mailserver-config" {
-            type = "host"
-            source = "mailserver-config"
-            access_mode = "single-node-single-writer"
-            attachment_mode = "file-system"
-        }
+job "postgres" {
+    datacenters = ["bischheim"]
 
-        volume "mailserver-data" {
+    update {
+        max_parallel = 1
+        healthy_deadline = "2m"
+        progress_deadline = "6m"
+    }
+    
+    group "postgres" {
+        volume "pgdata" {
             type = "host"
-            source = "mailserver-data"
-            access_mode = "single-node-single-writer"
+            source = "pgdata"
+            access_mode = "single-node-multi-writer"
             attachment_mode = "file-system"
-        }
-
-        ephemeral_disk {
-            migrate = true
-            size = 1024
         }
 
         network {
-            port "smtp" {
-                static = "25"
-            }
-
-            port "smtps" {
-                static = "465"
-            }
-
-            port "imaps" {
-                static = "993"
+            port "postgres-db" {
+                to = 5432
             }
         }
 
         service {
-            name = "smtps"
-            port = "smtps"
+            name = "postgresql-direct"
+            port = "postgres-db"
             provider = "nomad"
 
-            // Checks appear as ERRORs, inside the container
-            /*check {
-                name = "smtps_probe"
+            check {
+                name = "postgres_probe"
                 type = "tcp"
-                interval = "1m"
-                timeout = "2s"
-            }*/
+                interval = "10s"
+                timeout = "1s"
+            }
         }
 
-        task "docker-mailserver" {
-            resources {
-                cpu = 1000
-                memory = 2000
-                memory_max = 4000
-            }
+        count = 1
 
+        task "postgres" {
             driver = "docker"
             config {
-                image = "mailserver/docker-mailserver:15"
-                hostname = "mail.lantey.org"
-                ports = ["smtp","smtps","imaps"]
-
-                mount {
-                    type = "bind"
-                    target = "/etc/localtime"
-                    source = "/etc/localtime"
-                    readonly = true
-                }
-
-                volumes = [
-                    "alloc/data/mail-state:/var/mail-state",
-                    "alloc/data/logs:/var/log/mail",
-                    "local/redis.conf:/etc/rspamd/local.d/redis.conf"
+                //image = "gitea.lantey.org/lantey.org/pg-vchord-fr:pg18-v0.5.3-amd64"
+                image = "pg-vchord-fr:pg18-v0.5.3-amd64"
+                /*auth {
+                    username = "virgile"
+                    password = "${REGISTRY_PASS}"
+                }*/
+                ports = [ "postgres-db" ]
+                shm_size = "${128 * 1000 * 1000}"
+                args = [
+                    "-c",
+                    "config_file=/local/postgresql.conf"
                 ]
-
-                logging {
-                    type = "loki"
-                    config {
-                        loki-url = "${LOKI_URL}"
-                        loki-retries = "3"
-                        loki-batch-size = "400"
-                        loki-external-labels = "nomad_dc=${NOMAD_DC},nomad_job=${NOMAD_JOB_NAME},nomad_group=${NOMAD_GROUP_NAME},nomad_task=${NOMAD_TASK_NAME},container_name={{.Name}}"
-                    }
-                }
             }
 
             template {
-                data = file("./env.hcl.tmpl8")
+                data = <<-EOH
+                    {{- with nomadVar "nomad/jobs/postgres" }}
+                    POSTGRES_USER = "{{ .default_user }}"
+                    POSTGRES_PASSWORD = "{{ .default_password }}"
+                    REGISTRY_PASS = "{{ .DockerRegistryPassword }}"
+                    {{ end -}}
+                    EOH
+                destination = "secrets/file.env"
                 env = true
-                destination = "local/env"
             }
 
             template {
-                data = <<-EOF
-                    {{- range nomadService "redis" -}}
-                    servers = "{{ .Address }}:{{ .Port }}";
-                    {{- end }}
-                    expand_keys = true;
-                    EOF
-                destination = "local/redis.conf"
+                data = <<-EOH
+                    listen_addresses = '*'
+                    shared_preload_libraries = 'vchord.so'
+                    unix_socket_directories = '/var/lib/postgresql/db-{{ env "NOMAD_ALLOC_INDEX" }}/18/docker'
+                    autovacuum_worker_slots = 16	# autovacuum worker slots to allocate
+                    # --- REPLICATION ---
+                    wal_level = logical
+                    EOH
+                destination = "local/postgresql.conf"
             }
 
-            template {
-                data = <<-EOF
-                    {{- with nomadVar "ssl/lantey~2Eorg" -}}
-                    {{- .full_chain -}}
-                    {{- end -}}
-                    EOF
-                destination = "local/mail.lantey.org.crt"
-                change_mode = "noop"
-            }
-
-            template {
-                data = <<-EOF
-                    {{- with nomadVar "ssl/lantey~2Eorg" -}}
-                    {{- .key -}}
-                    {{- end -}}
-                    EOF
-                destination = "secrets/mail.lantey.org.key"
-                perms = "600"
-                change_mode = "script"
-                change_script {
-                    command = "kill -s SIGHUP $(cat /run/dovecot/master.pid) && kill -s SIGHUP $(cat /var/spool/postfix/pid/master.pid)"
-                    timeout = "30s"
-                }
+            env {
+                PGDATA = "/var/lib/postgresql/db-${NOMAD_ALLOC_INDEX}/18/docker"
             }
 
             volume_mount {
-                volume = "mailserver-config"
-                destination = "/tmp/docker-mailserver"
+                volume = "pgdata"
+                destination = "/var/lib/postgresql"
             }
 
-            volume_mount {
-                volume = "mailserver-data"
-                destination = "/var/mail"
+            resources {
+                cpu = 2000
+                memory = 8000
+            }
+        }
+    }
+
+    group "haproxy" {
+        network {
+            port "postgres" { }
+        }
+
+        service {
+            name = "postgresql"
+            port = "postgres"
+            provider = "nomad"
+        }
+
+        task "haproxy" {
+            driver = "docker"
+            config {
+                image = "haproxy:3.3-alpine"
+                args = [
+                    "-f",
+                    "/local/haproxy.conf"
+                ]
+                ports = [ "postgres" ]
+            }
+
+            resources {
+                cores = 1
+            }
+
+            template {
+                data = <<-EOH
+                    global
+                        daemon
+
+                    defaults
+                        mode tcp
+                        timeout client 10s
+                        timeout connect 5s
+                        timeout server 60s
+                    
+                    frontend postgresql_front
+                        bind :{{ env "NOMAD_PORT_postgres" }}
+                        default_backend postgresql_back
+                    
+                    backend postgresql_back
+                        balance roundrobin
+                        #option pgsql-check haproxy
+                        {{- range nomadService "postgresql-direct" }}
+                        server postgres{{ .Port }} {{ .Address }}:{{ .Port }} check
+                        {{- end }}
+
+                    EOH
+                destination = "local/haproxy.conf"
+                change_mode = "signal"
+                change_signal = "SIGHUP"
             }
         }
     }
