@@ -5,10 +5,10 @@
       "customType": "regex",
       "managerFilePatterns": ["/^(?:\\.?[Nn]omad\\/)?[^\\/]*\\.hcl$/"],
       "matchStrings": [
-        "\\s*image\\s*=\\s*\"(?:(?<registry>[^\\/]+?)\\/)??(?<packageName>(?:(?:[^\\/:\\.]+\\.)?[^\\/:\\.]+\\/)??[^\\/:]+?)(?::(?<currentValue>\\S*?))?(?:@sha256:(?<currentDigest>[a-fA-F0-9]+))?\""
+        "(?:\\{|,)\\s*image\\s*=\\s*\"(?:(?<registry>.+?)\\/)??(?<package>(?:[^\\/\":]+\\/)?[^\\/:\"]+)(?::(?<currentValue>[^\\s\"@]+))?(?:@sha256:(?<currentDigest>[a-fA-F0-9]+))?\""
       ],
-      "registryUrlTemplate": "{{#if registry}}https://{{{registry}}}{{/if}}",
-      "depNameTemplate": "{{lookup (split packageName '/') 1 }}",
+      "packageNameTemplate": "{{#if (containsString package 'docker.gitea.com/')}}{{{replace 'docker\\.gitea\\.com\\/' '' package}}}{{else}}{{{package}}}{{/if}}",
+      "registryUrlTemplate": "{{#if registry}}https://{{{registry}}}{{else if (containsString package 'docker.gitea.com')}}docker.gitea.com{{/if}}",
       "datasourceTemplate": "docker"
     }
   ]
