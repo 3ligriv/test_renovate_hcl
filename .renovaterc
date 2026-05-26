@@ -8,7 +8,7 @@
         "(?:\\{|,)\\s*image\\s*=\\s*\"(?:(?<registry>.+?)\\/)??(?<package>(?:[^\\/\":]+\\/)?[^\\/:\"]+)(?::(?<currentValue>[^\\s\"@]+))?(?:@sha256:(?<currentDigest>[a-fA-F0-9]+))?\""
       ],
       "packageNameTemplate": "{{#if (containsString package 'docker.gitea.com/')}}{{{replace 'docker\\.gitea\\.com\\/' '' package}}}{{else}}{{{package}}}{{/if}}",
-      "registryUrlTemplate": "{{#if registry}}https://{{{registry}}}{{else if (containsString package 'docker.gitea.com')}}docker.gitea.com{{/if}}",
+      "registryUrlTemplate": "{{#if registry}}https://{{{registry}}}{{else if (containsString package 'docker.gitea.com')}}docker.gitea.com{{else}}https://docker.io{{/if}}",
       "datasourceTemplate": "docker"
     }
   ]
