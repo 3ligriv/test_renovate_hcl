@@ -5,7 +5,7 @@
       "customType": "regex",
       "managerFilePatterns": ["/^(?:\\.?[Nn]omad\\/)?[^\\/]*\\.hcl$/"],
       "matchStrings": [
-        "\\s*image\\s*=\\s*\"(?:(?<registry>[^\\/]+?)\\/)??(?<packageName>(?:(?:[^\\/:\\.]+\\.)?[^\\/:\\.]+\\/)??[^\\/:]+?)(?::(?<currentValue>\\S*?))?(?:@sha256:(?<currentDigest>[a-fA-F0-9]+))?\"",
+        "\\s*image\\s*=\\s*\"(?:(?<registry>[^\\/]+?)\\/)??(?<packageName>(?:(?:[^\\/:\\.]+\\.)?[^\\/:\\.]+\\/)??[^\\/:]+?)(?::(?<currentValue>\\S*?))?(?:@sha256:(?<currentDigest>[a-fA-F0-9]+))?\""
       ],
       "registryUrlTemplate": "{{#if registry}}https://{{{registry}}}{{/if}}",
       "depNameTemplate": "{{lookup (split packageName '/') 1 }}",
