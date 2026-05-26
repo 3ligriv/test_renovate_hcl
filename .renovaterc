@@ -1,15 +1,15 @@
 {
-  extends: ['config:best-practices'],
-  customManagers: [
+  "extends": ["config:best-practices"],
+  "customManagers": [
     {
-      customType: 'regex',
-      managerFilePatterns: ['/^(?:\\.?[Nn]omad\\/)?[^\\/]*\\.hcl$/'],
-      matchStrings: [
-        '\\s*image\\s*=\\s*"(?:(?<registry>[^\\/]+?)\\/)??(?<packageName>(?:(?:[^\\/:\\.]+\\.)?[^\\/:\\.]+\\/)??[^\\/:]+?)(?::(?<currentValue>\\S*?))?(?:@sha256:(?<currentDigest>[a-fA-F0-9]+))?"',
+      "customType": "regex",
+      "managerFilePatterns": ["/^(?:\\.?[Nn]omad\\/)?[^\\/]*\\.hcl$/"],
+      "matchStrings": [
+        "\\s*image\\s*=\\s*\"(?:(?<registry>[^\\/]+?)\\/)??(?<packageName>(?:(?:[^\\/:\\.]+\\.)?[^\\/:\\.]+\\/)??[^\\/:]+?)(?::(?<currentValue>\\S*?))?(?:@sha256:(?<currentDigest>[a-fA-F0-9]+))?\"",
       ],
-      registryUrlTemplate: '{{#if registry}}https://{{{registry}}}{{/if}}',
-      depNameTemplate: "{{lookup (split packageName '/') 1 }}",
-      datasourceTemplate: 'docker',
-    },
-  ],
+      "registryUrlTemplate": "{{#if registry}}https://{{{registry}}}{{/if}}",
+      "depNameTemplate": "{{lookup (split packageName '/') 1 }}",
+      "datasourceTemplate": "docker"
+    }
+  ]
 }
